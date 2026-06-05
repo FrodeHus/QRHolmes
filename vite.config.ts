@@ -19,7 +19,5 @@ export default defineConfig({
     setupFiles: "./vitest.setup.ts",
     globals: true,
   },
-  server: {
-    allowedHosts: ["localhost"],
-  },
+  base: "/QRHolmes/",
 });
