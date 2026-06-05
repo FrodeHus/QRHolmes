@@ -62,6 +62,32 @@ describe('expandShortLink', () => {
     });
   });
 
+  it('ignores provider preview page assets when scraping HTML', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        `
+          <link href="/css/front.css?id=8a2a22d4fdd8f71cdf8183d3a6e5a956" rel="stylesheet">
+          <a href="https://example.com/actual-destination">Proceed to this site</a>
+        `,
+        {
+          headers: { 'content-type': 'text/html' }
+        }
+      )
+    );
+
+    await expect(
+      expandShortLink('https://tinyurl.com/nmc5z44b', {
+        provider: 'TinyURL',
+        previewUrl: 'https://tinyurl.com/preview/nmc5z44b',
+        fetcher
+      })
+    ).resolves.toEqual({
+      status: 'expanded',
+      chain: ['https://tinyurl.com/nmc5z44b', 'https://example.com/actual-destination'],
+      message: 'Provider preview exposed a destination URL.'
+    });
+  });
+
   it('falls back to HEAD probing when provider preview content has no destination', async () => {
     const fetcher = vi
       .fn<typeof fetch>()

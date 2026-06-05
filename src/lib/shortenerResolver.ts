@@ -19,6 +19,7 @@ export interface ExpandOptions {
 
 const DEFAULT_TIMEOUT_MS = 7000;
 const PREVIEW_EXPOSED_MESSAGE = 'Provider preview exposed a destination URL.';
+const STATIC_ASSET_PATH_RE = /\.(?:css|js|mjs|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot|json|xml|txt)$/i;
 
 export async function expandShortLink(
   originalUrl: string,
@@ -187,6 +188,9 @@ function normalizeCandidateUrl(value: string, originalUrl: string, previewUrl: s
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return null;
     }
+    if (isPreviewPageAsset(parsed, previewUrl)) {
+      return null;
+    }
     if (parsed.toString() === originalUrl || parsed.toString() === previewUrl) {
       return null;
     }
@@ -194,6 +198,11 @@ function normalizeCandidateUrl(value: string, originalUrl: string, previewUrl: s
   } catch {
     return null;
   }
+}
+
+function isPreviewPageAsset(parsed: URL, previewUrl: string): boolean {
+  const preview = new URL(previewUrl);
+  return parsed.origin === preview.origin && STATIC_ASSET_PATH_RE.test(parsed.pathname);
 }
 
 function decodeHtmlEntities(value: string): string {
