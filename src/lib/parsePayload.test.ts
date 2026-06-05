@@ -14,10 +14,10 @@ describe('parsePayload', () => {
     });
   });
 
-  it('trims raw input before parsing', () => {
+  it('preserves raw original while trimming actionable URL fields', () => {
     expect(parsePayload('  https://example.com  ')).toMatchObject({
       type: 'url',
-      original: 'https://example.com',
+      original: '  https://example.com  ',
       href: 'https://example.com'
     });
   });
@@ -67,6 +67,24 @@ describe('parsePayload', () => {
       address: 'test@example.com',
       subject: 'Hello',
       body: 'World'
+    });
+  });
+
+  it('falls back to deep links for malformed mailto payloads', () => {
+    expect(parsePayload('mailto:%')).toEqual({
+      type: 'deep-link',
+      original: 'mailto:%',
+      href: 'mailto:%',
+      scheme: 'mailto'
+    });
+  });
+
+  it('does not throw for incomplete encoded mailto payloads', () => {
+    expect(parsePayload('mailto:%E0%A4%A')).toEqual({
+      type: 'deep-link',
+      original: 'mailto:%E0%A4%A',
+      href: 'mailto:%E0%A4%A',
+      scheme: 'mailto'
     });
   });
 
