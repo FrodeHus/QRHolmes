@@ -1,9 +1,9 @@
 {
-  "name": "QRHolmes",
-  "short_name": "QRHolmes",
+  "name": "QR Holmes",
+  "short_name": "QR Holmes",
   "description": "Inspect QR code contents locally in your browser.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/QRHolmes/",
+  "scope": "/QRHolmes/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f3f1ea",
