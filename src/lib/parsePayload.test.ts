@@ -14,10 +14,27 @@ describe('parsePayload', () => {
     });
   });
 
+  it('trims raw input before parsing', () => {
+    expect(parsePayload('  https://example.com  ')).toMatchObject({
+      type: 'url',
+      original: 'https://example.com',
+      href: 'https://example.com'
+    });
+  });
+
   it('parses custom app links as deep links', () => {
     expect(parsePayload('otpauth://totp/Example:user?secret=abc')).toMatchObject({
       type: 'deep-link',
       scheme: 'otpauth'
+    });
+  });
+
+  it('falls back to deep links for invalid custom-scheme URLs', () => {
+    expect(parsePayload('custom:bad value')).toEqual({
+      type: 'deep-link',
+      original: 'custom:bad value',
+      href: 'custom:bad value',
+      scheme: 'custom'
     });
   });
 
@@ -69,6 +86,16 @@ describe('parsePayload', () => {
       href: 'sms:+15551234567?body=Hi',
       number: '+15551234567',
       body: 'Hi'
+    });
+  });
+
+  it('parses SMSTO payloads with colon-separated body', () => {
+    expect(parsePayload('SMSTO:+15551234567:Hi there')).toEqual({
+      type: 'sms',
+      original: 'SMSTO:+15551234567:Hi there',
+      href: 'SMSTO:+15551234567:Hi there',
+      number: '+15551234567',
+      body: 'Hi there'
     });
   });
 

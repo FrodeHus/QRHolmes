@@ -28,6 +28,10 @@ export function parsePayload(raw: string): ParsedPayload {
 
   const scheme = original.match(SCHEME_RE)?.[1]?.toLowerCase();
   if (scheme) {
+    if (scheme !== 'http' && scheme !== 'https' && /\s/.test(original.slice(scheme.length + 1))) {
+      return { type: 'deep-link', original, href: original, scheme };
+    }
+
     try {
       const parsed = new URL(original);
       return {
@@ -117,6 +121,19 @@ function parseMailto(original: string): ParsedPayload {
 function parseSms(original: string): ParsedPayload {
   const schemeEnd = original.indexOf(':');
   const rest = original.slice(schemeEnd + 1);
+  const scheme = original.slice(0, schemeEnd).toLowerCase();
+
+  if (scheme === 'smsto') {
+    const bodyStart = rest.indexOf(':');
+    return {
+      type: 'sms',
+      original,
+      href: original,
+      number: bodyStart === -1 ? rest : rest.slice(0, bodyStart),
+      body: bodyStart === -1 ? undefined : rest.slice(bodyStart + 1) || undefined
+    };
+  }
+
   const [number, query = ''] = rest.split('?');
   const params = new URLSearchParams(query);
   return {
