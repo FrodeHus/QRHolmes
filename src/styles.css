@@ -717,17 +717,25 @@ a {
   position: relative;
   isolation: isolate;
   display: grid;
-  align-items: end;
+  align-items: stretch;
   width: min(100%, 430px);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   padding: max(22px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom))
     max(14px, env(safe-area-inset-left));
+  overflow: hidden;
 }
 
 .privacy-screen .plain-panel {
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  min-height: 0;
   margin: 0;
   border-radius: 30px 30px 20px 20px;
   background: var(--sheet-strong);
+  overflow: auto;
 }
 
 .sheet-handle {
