@@ -11,22 +11,63 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
 
+function isRunningStandalone() {
+  const navigatorWithStandalone = navigator as Navigator & {
+    standalone?: boolean;
+  };
+
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    navigatorWithStandalone.standalone === true
+  );
+}
+
+function getManualInstallCopy() {
+  const userAgent = navigator.userAgent;
+  const isIos = /iphone|ipad|ipod/i.test(userAgent);
+  const isAndroid = /android/i.test(userAgent);
+
+  if (isIos) {
+    return {
+      summary: "Use Safari Share to add it.",
+      details: "Tap Share, then Add to Home Screen.",
+    };
+  }
+
+  if (isAndroid) {
+    return {
+      summary: "Use your browser menu to add it.",
+      details: "Open the browser menu, then tap Install app or Add to Home screen.",
+    };
+  }
+
+  return null;
+}
+
 export default function HomeScreen({ onInspect, onPrivacy }: HomeScreenProps) {
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [showInstall, setShowInstall] = useState(false);
+  const [installHelp, setInstallHelp] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const manualInstallCopy = getManualInstallCopy();
 
   useEffect(() => {
+    if (!isRunningStandalone() && manualInstallCopy) {
+      setShowInstall(true);
+    }
+
     function handleBeforeInstallPrompt(event: Event) {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
       setShowInstall(true);
+      setInstallHelp(false);
     }
 
     function handleAppInstalled() {
       setInstallPrompt(null);
       setShowInstall(false);
+      setInstallHelp(false);
       showToast("Added to Home Screen");
     }
 
@@ -49,7 +90,7 @@ export default function HomeScreen({ onInspect, onPrivacy }: HomeScreenProps) {
 
   async function handleInstall() {
     if (!installPrompt) {
-      showToast("Install is not available in this browser");
+      setInstallHelp(true);
       return;
     }
 
@@ -122,15 +163,25 @@ export default function HomeScreen({ onInspect, onPrivacy }: HomeScreenProps) {
           </div>
           <div>
             <h2>Add to Home Screen</h2>
-            <p>Inspect codes in one tap. Works offline.</p>
+            <p>
+              {installPrompt
+                ? "Inspect codes in one tap. Works offline."
+                : manualInstallCopy?.summary}
+            </p>
+            {installHelp && manualInstallCopy ? (
+              <p className="install-help">{manualInstallCopy.details}</p>
+            ) : null}
           </div>
           <button type="button" onClick={handleInstall}>
-            Install
+            {installPrompt ? "Install" : "How"}
           </button>
           <button
             type="button"
             className="dismiss-install"
-            onClick={() => setShowInstall(false)}
+            onClick={() => {
+              setShowInstall(false);
+              setInstallHelp(false);
+            }}
             aria-label="Dismiss"
           >
             x
