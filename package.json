@@ -2,7 +2,7 @@
   "name": "qrholmes",
   "private": true,
   "version": "0.1.0",
-  "homepage": "https://frodehus.github.io/QRHolmes/",
+  "homepage": "https://qr.reothor.no/",
   "type": "module",
   "scripts": {
     "dev": "vite",

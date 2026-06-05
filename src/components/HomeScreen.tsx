@@ -103,7 +103,7 @@ export default function HomeScreen({ onInspect, onPrivacy }: HomeScreenProps) {
         </div>
       </section>
 
-      <footer className="home-footer">
+      <footer className="home-footer" aria-label="More options">
         <button type="button" className="ghost-button" onClick={onPrivacy}>
           <span className="shield-icon" aria-hidden="true" />
           Privacy

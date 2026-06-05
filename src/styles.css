@@ -104,7 +104,7 @@ a {
   content: "";
   position: absolute;
   right: -32%;
-  bottom: -18%;
+  bottom: 5%;
   z-index: -1;
   width: 88%;
   aspect-ratio: 1;
@@ -286,6 +286,8 @@ a {
 .home-footer {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: 40px 40px;
+  align-items: end;
   gap: 12px;
 }
 

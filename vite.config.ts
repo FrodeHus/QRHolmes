@@ -19,5 +19,4 @@ export default defineConfig({
     setupFiles: "./vitest.setup.ts",
     globals: true,
   },
-  base: "/QRHolmes/",
 });
