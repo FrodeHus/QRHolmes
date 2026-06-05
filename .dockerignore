@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+.gitnexus
+.DS_Store
+docs/superpowers/plans
+npm-debug.log*
+Dockerfile
+README.md
