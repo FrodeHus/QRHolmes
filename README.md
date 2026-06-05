@@ -15,18 +15,7 @@ QRHolmes is a small, static PWA for checking what a QR code contains. Scan a cod
 - Defangs URLs in the UI so they are easier to inspect without accidental clicks.
 - Parses common QR payloads like URLs, email, phone numbers, SMS, Wi-Fi configs, deep links, and plain text.
 - Lets you copy the original value or open the real target when you choose.
-- Flags known short-link providers and can run an explicit expansion check.
 - Works as an installable PWA when the browser supports it.
-
-## Short links
-
-Short links are handled carefully. QRHolmes does not say a link is safe.
-
-When you choose to expand a short link, the app sends a `HEAD` request to the short URL with redirects set to `manual`. It then checks provider-specific target headers the browser is allowed to read, such as:
-
-- provider target headers, for example TinyURL's `x-tinyurl-target`
-
-It does not try to use the redirect `Location` header. For cross-origin manual redirects, that header is not available to ordinary client-side JavaScript in a reliable way. If the response is a redirect but no provider target header is readable, QRHolmes tells you that instead of guessing.
 
 ## Privacy
 
@@ -34,7 +23,6 @@ The scanner runs locally in your browser. QR contents are not sent to the hostin
 
 Network requests only happen when you choose actions that need them:
 
-- expanding a short link contacts the shortener, but does not follow the redirect
 - opening a link contacts the destination
 
 Copying a payload does not make a network request.
@@ -73,7 +61,7 @@ Then open `http://localhost:8080`.
 ## Project shape
 
 - `src/components` - app screens and UI pieces
-- `src/lib` - QR payload parsing, defanging, actions, and short-link expansion
+- `src/lib` - QR payload parsing, defanging, and actions
 - `public` - static PWA assets
 - `scripts/generate-icons.mjs` - icon generation
 - `Dockerfile` and `nginx.conf` - production static hosting

@@ -24,13 +24,6 @@ export default function PrivacyScreen({ onBack }: PrivacyScreenProps) {
             <p>No sign-in, analytics, ad SDKs, or profiling are required for QR inspection.</p>
           </article>
           <article>
-            <h2>Short-link checks are explicit</h2>
-            <p>
-              Expanding a short link sends a HEAD request to the shortener and only reads provider target headers that
-              client-side JavaScript can access.
-            </p>
-          </article>
-          <article>
             <h2>Camera is opt-in</h2>
             <p>The camera only activates while you are on the scanner and stops when you leave it.</p>
           </article>

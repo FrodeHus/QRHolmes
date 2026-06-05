@@ -1,48 +1,39 @@
-import { useState } from 'react';
-import { defangUrl } from '../lib/defangUrl';
-import {
-  EXPANSION_NETWORK_NOTICE,
-  expandShortLink,
-  type ExpansionResult
-} from '../lib/shortenerResolver';
-import type { ShortenerInfo } from '../lib/shorteners';
+import type { ShortenerInfo } from "../lib/shorteners";
 
 interface ShortLinkPanelProps {
   originalUrl: string;
   info: ShortenerInfo;
 }
 
-export default function ShortLinkPanel({ originalUrl, info }: ShortLinkPanelProps) {
-  const [result, setResult] = useState<ExpansionResult | null>(null);
-  const [isExpanding, setIsExpanding] = useState(false);
-
-  async function handleExpand() {
-    setIsExpanding(true);
-    try {
-      setResult(await expandShortLink(originalUrl, { provider: info.provider, previewUrl: info.previewUrl }));
-    } finally {
-      setIsExpanding(false);
+export default function ShortLinkPanel({
+  originalUrl,
+  info,
+}: ShortLinkPanelProps) {
+  function handleOpen() {
+    if (info.previewUrl) {
+      window.open(info.previewUrl, "_blank", "noopener,noreferrer");
     }
   }
-
   return (
     <section className="short-link-panel" aria-label="Short link inspection">
       <p className="eyebrow">Short Link</p>
       <h2>{info.provider}</h2>
-      <p>{info.provider} links can hide the destination. Expansion only runs when you choose it.</p>
-      <p className="network-notice">{EXPANSION_NETWORK_NOTICE}</p>
-      <button type="button" className="button button-secondary" onClick={handleExpand} disabled={isExpanding}>
-        {isExpanding ? 'Inspecting...' : 'Expand short link'}
-      </button>
-      {result ? (
-        <div className="expansion-result">
-          <p>{result.message}</p>
-          <ol>
-            {result.chain.map((url) => (
-              <li key={url}>{defangUrl(url)}</li>
-            ))}
-          </ol>
-        </div>
+      <p>{info.provider} links can hide the destination.</p>
+      {info.strategy === "preview" ? (
+        <p>This provider can show a preview page to display the destination.</p>
+      ) : (
+        <p>
+          This provider, unfortunately, does not support previewing the
+          destination.
+        </p>
+      )}
+      {info.strategy === "preview" && info.previewUrl ? (
+        <button
+          type="button"
+          className="button button-secondary"
+          onClick={handleOpen}
+          title={`Preview the destination of this ${info.provider} link`}
+        >{`Preview the destination of this ${info.provider} link`}</button>
       ) : null}
     </section>
   );
