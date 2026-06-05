@@ -12,10 +12,10 @@ describe('EXPANSION_NETWORK_NOTICE', () => {
 describe('expandShortLink', () => {
   const original = 'https://bit.ly/example';
 
-  it('extracts a destination from a provider JSON preview response', async () => {
+  it('extracts TinyURL destination from the provider target header', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(JSON.stringify({ url: 'https://example.com/final' }), {
-        headers: { 'content-type': 'application/json' }
+      new Response(null, {
+        headers: { 'x-tinyurl-target': 'https://example.com/final' }
       })
     );
 
@@ -28,13 +28,13 @@ describe('expandShortLink', () => {
     ).resolves.toMatchObject({
       status: 'expanded',
       chain: [original, 'https://example.com/final'],
-      message: 'Provider preview exposed a destination URL.'
+      message: 'Response headers exposed a destination URL.'
     });
     expect(fetcher).toHaveBeenCalledWith(
       'https://tinyurl.com/preview/example',
       expect.objectContaining({
-        method: 'GET',
-        redirect: 'follow',
+        method: 'HEAD',
+        redirect: 'manual',
         mode: 'cors',
         cache: 'no-store',
         signal: expect.any(AbortSignal)
@@ -42,10 +42,10 @@ describe('expandShortLink', () => {
     );
   });
 
-  it('extracts a destination from provider HTML preview content', async () => {
+  it('extracts a destination from a Location header when exposed', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response('<a href="https://example.com/from-preview">Continue to site</a>', {
-        headers: { 'content-type': 'text/html' }
+      new Response(null, {
+        headers: { location: 'https://example.com/from-location' }
       })
     );
 
@@ -57,23 +57,27 @@ describe('expandShortLink', () => {
       })
     ).resolves.toEqual({
       status: 'expanded',
-      chain: [original, 'https://example.com/from-preview'],
-      message: 'Provider preview exposed a destination URL.'
+      chain: [original, 'https://example.com/from-location'],
+      message: 'Response headers exposed a destination URL.'
     });
   });
 
-  it('ignores provider preview page assets when scraping HTML', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(
-        `
-          <link href="/css/front.css?id=8a2a22d4fdd8f71cdf8183d3a6e5a956" rel="stylesheet">
-          <a href="https://example.com/actual-destination">Proceed to this site</a>
-        `,
-        {
-          headers: { 'content-type': 'text/html' }
-        }
+  it('does not scrape provider preview HTML assets as destinations', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          '<link href="/css/front.css?id=8a2a22d4fdd8f71cdf8183d3a6e5a956" rel="stylesheet">',
+          {
+            headers: { 'content-type': 'text/html' }
+          }
+        )
       )
-    );
+      .mockResolvedValueOnce(new Response(null))
+      .mockResolvedValueOnce({
+        redirected: true,
+        url: 'https://example.com/head-final'
+      } as Response);
 
     await expect(
       expandShortLink('https://tinyurl.com/nmc5z44b', {
@@ -83,19 +87,18 @@ describe('expandShortLink', () => {
       })
     ).resolves.toEqual({
       status: 'expanded',
-      chain: ['https://tinyurl.com/nmc5z44b', 'https://example.com/actual-destination'],
-      message: 'Provider preview exposed a destination URL.'
+      chain: ['https://tinyurl.com/nmc5z44b', 'https://example.com/head-final'],
+      message: 'Browser reported a redirected final URL.'
     });
   });
 
-  it('falls back to HEAD probing when provider preview content has no destination', async () => {
+  it('falls back to HEAD probing when provider preview headers expose no destination', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
-        new Response('<html><body>No destination visible</body></html>', {
-          headers: { 'content-type': 'text/html' }
-        })
+        new Response(null)
       )
+      .mockResolvedValueOnce(new Response(null))
       .mockResolvedValueOnce({
         redirected: true,
         url: 'https://example.com/head-final'
@@ -112,15 +115,47 @@ describe('expandShortLink', () => {
       chain: [original, 'https://example.com/head-final'],
       message: 'Browser reported a redirected final URL.'
     });
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('extracts a destination from the original short URL Location header', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, {
+        headers: { location: 'https://example.com/manual-location' }
+      })
+    );
+
+    await expect(
+      expandShortLink(original, {
+        provider: 'Bitly',
+        fetcher
+      })
+    ).resolves.toEqual({
+      status: 'expanded',
+      chain: [original, 'https://example.com/manual-location'],
+      message: 'Response headers exposed a destination URL.'
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      original,
+      expect.objectContaining({
+        method: 'HEAD',
+        redirect: 'manual',
+        mode: 'cors',
+        cache: 'no-store',
+        signal: expect.any(AbortSignal)
+      })
+    );
   });
 
   it('returns an expanded chain when the browser reports a redirected final URL', async () => {
     const finalUrl = 'https://example.com/final';
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue({
-      redirected: true,
-      url: finalUrl
-    } as Response);
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null))
+      .mockResolvedValueOnce({
+        redirected: true,
+        url: finalUrl
+      } as Response);
 
     await expect(
       expandShortLink(original, {
@@ -135,17 +170,20 @@ describe('expandShortLink', () => {
   });
 
   it('probes with explicit HEAD redirect-follow fetch options', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue({
-      redirected: false,
-      url: original
-    } as Response);
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null))
+      .mockResolvedValueOnce({
+        redirected: false,
+        url: original
+      } as Response);
 
     await expandShortLink(original, {
       provider: 'Bitly',
       fetcher
     });
 
-    expect(fetcher).toHaveBeenCalledWith(
+    expect(fetcher).toHaveBeenLastCalledWith(
       original,
       expect.objectContaining({
         method: 'HEAD',
