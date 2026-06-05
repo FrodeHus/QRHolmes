@@ -12,8 +12,42 @@ describe('EXPANSION_NETWORK_NOTICE', () => {
 describe('expandShortLink', () => {
   const original = 'https://bit.ly/example';
 
-  it('returns a provider preview without calling the fetcher', async () => {
-    const fetcher = vi.fn<typeof fetch>();
+  it('extracts a destination from a provider JSON preview response', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ url: 'https://example.com/final' }), {
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await expect(
+      expandShortLink(original, {
+        provider: 'TinyURL',
+        previewUrl: 'https://tinyurl.com/preview/example',
+        fetcher
+      })
+    ).resolves.toMatchObject({
+      status: 'expanded',
+      chain: [original, 'https://example.com/final'],
+      message: 'Provider preview exposed a destination URL.'
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://tinyurl.com/preview/example',
+      expect.objectContaining({
+        method: 'GET',
+        redirect: 'follow',
+        mode: 'cors',
+        cache: 'no-store',
+        signal: expect.any(AbortSignal)
+      })
+    );
+  });
+
+  it('extracts a destination from provider HTML preview content', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('<a href="https://example.com/from-preview">Continue to site</a>', {
+        headers: { 'content-type': 'text/html' }
+      })
+    );
 
     await expect(
       expandShortLink(original, {
@@ -22,12 +56,37 @@ describe('expandShortLink', () => {
         fetcher
       })
     ).resolves.toEqual({
-      status: 'preview',
-      previewUrl: 'https://tinyurl.com/preview/example',
-      chain: [original],
-      message: 'Open the provider preview to inspect the destination before visiting it.'
+      status: 'expanded',
+      chain: [original, 'https://example.com/from-preview'],
+      message: 'Provider preview exposed a destination URL.'
     });
-    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('falls back to HEAD probing when provider preview content has no destination', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response('<html><body>No destination visible</body></html>', {
+          headers: { 'content-type': 'text/html' }
+        })
+      )
+      .mockResolvedValueOnce({
+        redirected: true,
+        url: 'https://example.com/head-final'
+      } as Response);
+
+    await expect(
+      expandShortLink(original, {
+        provider: 'TinyURL',
+        previewUrl: 'https://tinyurl.com/preview/example',
+        fetcher
+      })
+    ).resolves.toEqual({
+      status: 'expanded',
+      chain: [original, 'https://example.com/head-final'],
+      message: 'Browser reported a redirected final URL.'
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
   it('returns an expanded chain when the browser reports a redirected final URL', async () => {

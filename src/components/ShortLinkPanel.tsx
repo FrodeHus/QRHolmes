@@ -42,11 +42,6 @@ export default function ShortLinkPanel({ originalUrl, info }: ShortLinkPanelProp
               <li key={url}>{defangUrl(url)}</li>
             ))}
           </ol>
-          {result.previewUrl ? (
-            <a href={result.previewUrl} target="_blank" rel="noreferrer">
-              Open provider preview
-            </a>
-          ) : null}
         </div>
       ) : null}
     </section>
