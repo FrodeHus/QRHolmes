@@ -106,15 +106,20 @@ export default function ScannerScreen({ onCancel, onDetected }: ScannerScreenPro
   return (
     <main className="scanner-screen">
       <div className="scanner-topbar">
-        <button type="button" className="link-button scanner-cancel" onClick={onCancel}>
-          Cancel
+        <button type="button" className="scanner-close" onClick={onCancel} aria-label="Cancel">
+          x
         </button>
-        <span>{scannerMessage(status)}</span>
+        <span className="scanner-status">
+          <span className={`scanner-dot ${status === 'scanning' || status === 'starting' ? 'scanner-dot-live' : ''}`} />
+          {scannerMessage(status)}
+        </span>
+        <span className="scanner-spacer" aria-hidden="true" />
       </div>
       <div className="scanner-frame">
         <video ref={videoRef} playsInline muted />
         <canvas ref={canvasRef} aria-hidden="true" />
         <div className="scanner-reticle" aria-hidden="true" />
+        {status === 'scanning' || status === 'starting' ? <div className="scanner-laser" aria-hidden="true" /> : null}
       </div>
       <p className="scanner-help">{scannerHelp(status)}</p>
     </main>

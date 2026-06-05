@@ -1,7 +1,7 @@
 export type ExpansionStatus = 'idle' | 'preview' | 'expanded' | 'blocked' | 'timeout';
 
 export const EXPANSION_NETWORK_NOTICE =
-  'Expanding a short link sends a request from this device to the shortener and may also contact redirected destinations your browser follows.';
+  'Expanding a short link sends a HEAD request from this device to the shortener and inspects exposed response headers.';
 
 export interface ExpansionResult {
   status: ExpansionStatus;
@@ -19,6 +19,9 @@ export interface ExpandOptions {
 
 const DEFAULT_TIMEOUT_MS = 7000;
 const HEADER_EXPOSED_MESSAGE = 'Response headers exposed a destination URL.';
+const HIDDEN_REDIRECT_MESSAGE =
+  'A redirect response was observed, but the destination header is not available to client-side JavaScript.';
+const NO_PROVIDER_HEADER_MESSAGE = 'No provider target header was observable from this browser.';
 const PROVIDER_TARGET_HEADERS: Record<string, string[]> = {
   tinyurl: ['x-tinyurl-target'],
   'preview.tinyurl.com': ['x-tinyurl-target'],
@@ -34,13 +37,6 @@ export async function expandShortLink(
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   try {
-    if (options.previewUrl) {
-      const previewResult = await inspectProviderPreview(originalUrl, options.previewUrl, fetcher, controller.signal);
-      if (previewResult) {
-        return previewResult;
-      }
-    }
-
     return await probeRedirect(originalUrl, fetcher, controller.signal);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -58,39 +54,6 @@ export async function expandShortLink(
     };
   } finally {
     clearTimeout(timeout);
-  }
-}
-
-async function inspectProviderPreview(
-  originalUrl: string,
-  previewUrl: string,
-  fetcher: typeof fetch,
-  signal: AbortSignal
-): Promise<ExpansionResult | null> {
-  try {
-    const response = await fetcher(previewUrl, {
-      method: 'HEAD',
-      redirect: 'manual',
-      mode: 'cors',
-      cache: 'no-store',
-      signal
-    });
-    const destination = getHeaderDestination(response.headers, originalUrl, previewUrl);
-
-    if (destination) {
-      return {
-        status: 'expanded',
-        chain: [originalUrl, destination],
-        message: HEADER_EXPOSED_MESSAGE
-      };
-    }
-
-    return null;
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw error;
-    }
-    return null;
   }
 }
 
@@ -116,27 +79,23 @@ async function probeRedirect(
     };
   }
 
-  const response = await fetcher(originalUrl, {
-    method: 'HEAD',
-    redirect: 'follow',
-    mode: 'cors',
-    cache: 'no-store',
-    signal
-  });
-
-  if (response.redirected && response.url !== originalUrl) {
+  if (isRedirectResponse(manualResponse)) {
     return {
-      status: 'expanded',
-      chain: [originalUrl, response.url],
-      message: 'Browser reported a redirected final URL.'
+      status: 'blocked',
+      chain: [originalUrl],
+      message: HIDDEN_REDIRECT_MESSAGE
     };
   }
 
   return {
     status: 'blocked',
     chain: [originalUrl],
-    message: 'No redirect target was observable from this browser.'
+    message: NO_PROVIDER_HEADER_MESSAGE
   };
+}
+
+function isRedirectResponse(response: Response): boolean {
+  return response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400);
 }
 
 function normalizeCandidateUrl(value: string, originalUrl: string, previewUrl: string): string | null {
@@ -160,8 +119,7 @@ function normalizeCandidateUrl(value: string, originalUrl: string, previewUrl: s
 }
 
 function getHeaderDestination(headers: Headers, originalUrl: string, previewUrl: string): string | null {
-  const names = [...providerHeaderNames(previewUrl), 'location'];
-  for (const name of names) {
+  for (const name of providerHeaderNames(previewUrl)) {
     const value = headers.get(name);
     if (!value) {
       continue;

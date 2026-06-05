@@ -6,17 +6,20 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'robots.txt'],
+      registerType: "autoUpdate",
+      includeAssets: ["icons/icon-192.png", "icons/icon-512.png", "robots.txt"],
       manifest: false,
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}']
-      }
-    })
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
+      },
+    }),
   ],
   test: {
-    environment: 'jsdom',
-    setupFiles: './vitest.setup.ts',
-    globals: true
-  }
+    environment: "jsdom",
+    setupFiles: "./vitest.setup.ts",
+    globals: true,
+  },
+  server: {
+    allowedHosts: ["localhost"],
+  },
 });

@@ -4,7 +4,7 @@ import { EXPANSION_NETWORK_NOTICE, expandShortLink } from './shortenerResolver';
 describe('EXPANSION_NETWORK_NOTICE', () => {
   it('discloses the outbound network behavior used for expansion', () => {
     expect(EXPANSION_NETWORK_NOTICE).toBe(
-      'Expanding a short link sends a request from this device to the shortener and may also contact redirected destinations your browser follows.'
+      'Expanding a short link sends a HEAD request from this device to the shortener and inspects exposed response headers.'
     );
   });
 });
@@ -13,6 +13,7 @@ describe('expandShortLink', () => {
   const original = 'https://bit.ly/example';
 
   it('extracts TinyURL destination from the provider target header', async () => {
+    const tinyUrl = 'https://tinyurl.com/example';
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(null, {
         headers: { 'x-tinyurl-target': 'https://example.com/final' }
@@ -20,18 +21,18 @@ describe('expandShortLink', () => {
     );
 
     await expect(
-      expandShortLink(original, {
+      expandShortLink(tinyUrl, {
         provider: 'TinyURL',
         previewUrl: 'https://tinyurl.com/preview/example',
         fetcher
       })
     ).resolves.toMatchObject({
       status: 'expanded',
-      chain: [original, 'https://example.com/final'],
+      chain: [tinyUrl, 'https://example.com/final'],
       message: 'Response headers exposed a destination URL.'
     });
     expect(fetcher).toHaveBeenCalledWith(
-      'https://tinyurl.com/preview/example',
+      tinyUrl,
       expect.objectContaining({
         method: 'HEAD',
         redirect: 'manual',
@@ -42,7 +43,7 @@ describe('expandShortLink', () => {
     );
   });
 
-  it('extracts a destination from a Location header when exposed', async () => {
+  it('does not use Location headers as client-side expansion targets', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(null, {
         headers: { location: 'https://example.com/from-location' }
@@ -56,28 +57,19 @@ describe('expandShortLink', () => {
         fetcher
       })
     ).resolves.toEqual({
-      status: 'expanded',
-      chain: [original, 'https://example.com/from-location'],
-      message: 'Response headers exposed a destination URL.'
+      status: 'blocked',
+      chain: [original],
+      message: 'No provider target header was observable from this browser.'
     });
   });
 
-  it('does not scrape provider preview HTML assets as destinations', async () => {
+  it('does not inspect provider preview HTML assets as destinations', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        new Response(
-          '<link href="/css/front.css?id=8a2a22d4fdd8f71cdf8183d3a6e5a956" rel="stylesheet">',
-          {
-            headers: { 'content-type': 'text/html' }
-          }
-        )
-      )
       .mockResolvedValueOnce(new Response(null))
-      .mockResolvedValueOnce({
-        redirected: true,
-        url: 'https://example.com/head-final'
-      } as Response);
+      .mockResolvedValueOnce(new Response(null, {
+        headers: { location: 'https://tinyurl.com/css/front.css?id=8a2a22d4fdd8f71cdf8183d3a6e5a956' }
+      }));
 
     await expect(
       expandShortLink('https://tinyurl.com/nmc5z44b', {
@@ -86,19 +78,19 @@ describe('expandShortLink', () => {
         fetcher
       })
     ).resolves.toEqual({
-      status: 'expanded',
-      chain: ['https://tinyurl.com/nmc5z44b', 'https://example.com/head-final'],
-      message: 'Browser reported a redirected final URL.'
+      status: 'blocked',
+      chain: ['https://tinyurl.com/nmc5z44b'],
+      message: 'No provider target header was observable from this browser.'
     });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to HEAD probing when provider preview headers expose no destination', async () => {
+  it('does not follow redirects when response headers expose no destination', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
         new Response(null)
       )
-      .mockResolvedValueOnce(new Response(null))
       .mockResolvedValueOnce({
         redirected: true,
         url: 'https://example.com/head-final'
@@ -111,16 +103,64 @@ describe('expandShortLink', () => {
         fetcher
       })
     ).resolves.toEqual({
-      status: 'expanded',
-      chain: [original, 'https://example.com/head-final'],
-      message: 'Browser reported a redirected final URL.'
+      status: 'blocked',
+      chain: [original],
+      message: 'No provider target header was observable from this browser.'
     });
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      original,
+      expect.objectContaining({
+        method: 'HEAD',
+        redirect: 'manual',
+        mode: 'cors',
+        cache: 'no-store',
+        signal: expect.any(AbortSignal)
+      })
+    );
   });
 
-  it('extracts a destination from the original short URL Location header', async () => {
+  it('reports when a redirect response hides its Location header from JavaScript', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(null, {
+        status: 301
+      })
+    );
+
+    await expect(
+      expandShortLink(original, {
+        provider: 'Bitly',
+        fetcher
+      })
+    ).resolves.toEqual({
+      status: 'blocked',
+      chain: [original],
+      message: 'A redirect response was observed, but the destination header is not available to client-side JavaScript.'
+    });
+  });
+
+  it('reports when a manual redirect response is opaque to JavaScript', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      headers: new Headers(),
+      type: 'opaqueredirect'
+    } as Response);
+
+    await expect(
+      expandShortLink(original, {
+        provider: 'Bitly',
+        fetcher
+      })
+    ).resolves.toEqual({
+      status: 'blocked',
+      chain: [original],
+      message: 'A redirect response was observed, but the destination header is not available to client-side JavaScript.'
+    });
+  });
+
+  it('reports redirects with ignored Location headers as hidden destinations', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(null, {
+        status: 301,
         headers: { location: 'https://example.com/manual-location' }
       })
     );
@@ -131,9 +171,9 @@ describe('expandShortLink', () => {
         fetcher
       })
     ).resolves.toEqual({
-      status: 'expanded',
-      chain: [original, 'https://example.com/manual-location'],
-      message: 'Response headers exposed a destination URL.'
+      status: 'blocked',
+      chain: [original],
+      message: 'A redirect response was observed, but the destination header is not available to client-side JavaScript.'
     });
     expect(fetcher).toHaveBeenCalledWith(
       original,
@@ -147,47 +187,20 @@ describe('expandShortLink', () => {
     );
   });
 
-  it('returns an expanded chain when the browser reports a redirected final URL', async () => {
-    const finalUrl = 'https://example.com/final';
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response(null))
-      .mockResolvedValueOnce({
-        redirected: true,
-        url: finalUrl
-      } as Response);
-
-    await expect(
-      expandShortLink(original, {
-        provider: 'Bitly',
-        fetcher
-      })
-    ).resolves.toEqual({
-      status: 'expanded',
-      chain: [original, finalUrl],
-      message: 'Browser reported a redirected final URL.'
-    });
-  });
-
-  it('probes with explicit HEAD redirect-follow fetch options', async () => {
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response(null))
-      .mockResolvedValueOnce({
-        redirected: false,
-        url: original
-      } as Response);
+  it('probes with explicit HEAD manual redirect options', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(null));
 
     await expandShortLink(original, {
       provider: 'Bitly',
       fetcher
     });
 
-    expect(fetcher).toHaveBeenLastCalledWith(
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
       original,
       expect.objectContaining({
         method: 'HEAD',
-        redirect: 'follow',
+        redirect: 'manual',
         mode: 'cors',
         cache: 'no-store',
         signal: expect.any(AbortSignal)
