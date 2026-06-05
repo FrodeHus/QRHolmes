@@ -1,5 +1,8 @@
 export type ExpansionStatus = 'idle' | 'preview' | 'expanded' | 'blocked' | 'timeout';
 
+export const EXPANSION_NETWORK_NOTICE =
+  'Expanding a short link sends a request from this device to the shortener and may also contact redirected destinations your browser follows.';
+
 export interface ExpansionResult {
   status: ExpansionStatus;
   previewUrl?: string;
